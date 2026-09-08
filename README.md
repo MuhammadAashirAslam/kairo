@@ -1,11 +1,21 @@
-# 🌐 Kairo — Open-Source On-Device RAG & Consultation Assistant for Android
+<p align="center">
+  <img src="assets/kairo_bg_removed.png" alt="Kairo Logo" width="120" />
+</p>
 
-[![Platform](https://img.shields.io/badge/Platform-Android%2010%2B%20(API%2029%2B)-green.svg)](https://android.com)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-blue.svg)](https://kotlinlang.org)
-[![Compose](https://img.shields.io/badge/Jetpack-Compose%20M3-purple.svg)](https://developer.android.com/jetpack/compose)
-[![Inference](https://img.shields.io/badge/Inference-llama.cpp%20(RunAnywhere)-orange.svg)](https://github.com/ggerganov/llama.cpp)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg)](CONTRIBUTING.md)
+<h1 align="center">Kairo</h1>
+
+<p align="center">
+  <strong>Open-Source On-Device RAG & Consultation Assistant for Android</strong>
+</p>
+
+<p align="center">
+  <a href="https://android.com"><img src="https://img.shields.io/badge/Platform-Android%2010%2B%20(API%2029%2B)-green.svg" alt="Platform" /></a>
+  <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.0.21-blue.svg" alt="Kotlin" /></a>
+  <a href="https://developer.android.com/jetpack/compose"><img src="https://img.shields.io/badge/Jetpack-Compose%20M3-purple.svg" alt="Compose" /></a>
+  <a href="https://github.com/ggerganov/llama.cpp"><img src="https://img.shields.io/badge/Inference-llama.cpp%20(RunAnywhere)-orange.svg" alt="Inference" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
+  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-Welcome-brightgreen.svg" alt="PRs Welcome" /></a>
+</p>
 
 **Kairo** is an open-source, modular, and privacy-first Android application designed for local Retrieval-Augmented Generation (RAG), clinical consultations, document synthesis, and conversational coding. 
 
