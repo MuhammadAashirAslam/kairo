@@ -1,7 +1,7 @@
 package com.example.kairo
 
+import android.content.ActivityNotFoundException
 import android.content.Context
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
@@ -56,12 +56,9 @@ import com.runanywhere.sdk.public.api.LlmOptions
 import com.runanywhere.sdk.public.api.llm
 import com.runanywhere.sdk.public.api.models
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
 
 sealed class Screen {
     object Chat : Screen()
@@ -281,27 +278,17 @@ fun KairoRootApp() {
         }
     }
 
-    // Camera Capture Launcher
-    val takePicturePreviewLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap: Bitmap? ->
-        if (bitmap != null) {
+    // Camera Capture Launcher (full-resolution via FileProvider for accurate OCR)
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        val capturedUri = pendingCameraUri
+        pendingCameraUri = null
+        if (success && capturedUri != null) {
+            stagedImageUri = capturedUri
             scope.launch {
-                val savedUri = withContext(Dispatchers.IO) {
-                    try {
-                        val cacheFile = File(context.cacheDir, "captured_ocr_${System.currentTimeMillis()}.jpg")
-                        FileOutputStream(cacheFile).use { out ->
-                            bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
-                        }
-                        Uri.fromFile(cacheFile)
-                    } catch (_: Exception) {
-                        null
-                    }
-                }
-
-                stagedImageUri = savedUri
-
-                val ocrResult = app.imageOcrRepository.extractTextFromBitmap(bitmap)
+                val ocrResult = app.imageOcrRepository.extractTextFromUri(context, capturedUri, "Camera Photo")
                 ocrResult.onSuccess { extracted ->
                     stagedImageText = extracted.fullText
                     Toast.makeText(context, "Photo Scanned: ${extracted.lineCount} lines detected", Toast.LENGTH_SHORT).show()
@@ -623,7 +610,20 @@ fun KairoRootApp() {
                                 pickVisualMediaLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             },
                             onTakePhotoClick = {
-                                takePicturePreviewLauncher.launch(null)
+                                try {
+                                    val captureFile = File(context.cacheDir, "captured_ocr_${System.currentTimeMillis()}.jpg")
+                                    val captureUri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        captureFile
+                                    )
+                                    pendingCameraUri = captureUri
+                                    takePictureLauncher.launch(captureUri)
+                                } catch (_: ActivityNotFoundException) {
+                                    Toast.makeText(context, "No camera app available on this device", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Unable to open camera: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                }
                             },
                             onOpenModelSetup = {
                                 currentScreen = Screen.ModelSetup
