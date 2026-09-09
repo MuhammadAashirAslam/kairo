@@ -55,6 +55,7 @@ import com.runanywhere.sdk.public.api.GenerationEvent
 import com.runanywhere.sdk.public.api.LlmOptions
 import com.runanywhere.sdk.public.api.llm
 import com.runanywhere.sdk.public.api.models
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -199,6 +200,9 @@ fun KairoRootApp() {
                     stage = IngestionStage.COMPLETED,
                     statusMessage = "Document fully indexed and ready for grounded retrieval!"
                 )
+            } catch (e: CancellationException) {
+                // Cancelled via the sheet's Cancel button - not an ingestion failure
+                throw e
             } catch (e: Exception) {
                 ingestionState = ingestionState.copy(
                     stage = IngestionStage.ERROR,
@@ -224,6 +228,9 @@ fun KairoRootApp() {
                     val readResult = app.documentRepository.readDocument(uri)
                     val docData = readResult.getOrThrow()
                     ingestDocumentText(docData.name, docData.content, docData.sizeBytes)
+                } catch (e: CancellationException) {
+                    // Read/ingest cancelled by the user - not a failure
+                    throw e
                 } catch (e: Exception) {
                     ingestionState = ingestionState.copy(
                         stage = IngestionStage.ERROR,
@@ -521,6 +528,19 @@ fun KairoRootApp() {
                                                 else -> {}
                                             }
                                         }
+                                    } catch (e: CancellationException) {
+                                        // User pressed Stop: keep whatever text streamed so far
+                                        // instead of overwriting it with a bogus error message.
+                                        val partial = generatedText.ifBlank { "(Generation stopped before any output)" }
+                                        messages[assistantIndex] = messages[assistantIndex].copy(
+                                            content = partial,
+                                            isGenerating = false
+                                        )
+                                        app.conversationStore.updateLastAssistantMessage(
+                                            content = partial,
+                                            isGenerating = false
+                                        )
+                                        throw e
                                     } catch (e: Exception) {
                                         val errorMsg = "Inference error: ${e.localizedMessage ?: "Unknown error"}"
                                         messages[assistantIndex] = messages[assistantIndex].copy(
