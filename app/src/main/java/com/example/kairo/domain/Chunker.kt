@@ -39,11 +39,28 @@ class Chunker(
         var currentBreadcrumb = blocks.firstOrNull()?.breadcrumb ?: documentName
         var currentHeading = blocks.firstOrNull()?.heading
 
-        fun flushCurrentChunk() {
+        fun flushCurrentChunk(carryOverlap: Boolean) {
             if (currentSentences.isEmpty()) return
             val raw = currentSentences.joinToString(" ").trim()
+
+            // Sliding-window overlap: keep the trailing ~overlapWords worth of
+            // sentences so the next chunk in the SAME section retains its local
+            // context. Never carried across a section boundary (purity first).
+            val carry = if (carryOverlap && overlapWords > 0) {
+                val kept = mutableListOf<String>()
+                var keptWords = 0
+                for (sentence in currentSentences.asReversed()) {
+                    val w = sentence.split(Regex("""\s+""")).filter { it.isNotBlank() }.size
+                    if (kept.isNotEmpty() && keptWords + w > overlapWords) break
+                    kept.add(0, sentence)
+                    keptWords += w
+                }
+                kept
+            } else {
+                emptyList()
+            }
+
             currentSentences.clear()
-            val wordsInChunk = currentWords
             currentWords = 0
 
             if (raw.isNotEmpty()) {
@@ -61,10 +78,17 @@ class Chunker(
                         rawText = raw,
                         breadcrumb = currentBreadcrumb,
                         heading = currentHeading,
-                        wordCount = wordsInChunk
+                        wordCount = raw.split(Regex("""\s+""")).filter { it.isNotBlank() }.size
                     )
                 )
                 chunkIndex++
+            }
+
+            if (carry.isNotEmpty()) {
+                currentSentences.addAll(carry)
+                currentWords = carry.sumOf { s ->
+                    s.split(Regex("""\s+""")).filter { it.isNotBlank() }.size
+                }
             }
         }
 
@@ -73,7 +97,7 @@ class Chunker(
 
             // If switching section heading/breadcrumb, flush accumulated sentences to keep chunks section-pure
             if (currentSentences.isNotEmpty() && currentBreadcrumb != block.breadcrumb) {
-                flushCurrentChunk()
+                flushCurrentChunk(carryOverlap = false)
             }
 
             currentBreadcrumb = block.breadcrumb
@@ -84,7 +108,7 @@ class Chunker(
 
                 // If adding this sentence exceeds maxChunkWords and we already have enough content, flush
                 if (currentWords + sentenceWords > maxChunkWords && currentWords >= minChunkWords) {
-                    flushCurrentChunk()
+                    flushCurrentChunk(carryOverlap = true)
                 }
 
                 currentSentences.add(sentence)
@@ -92,12 +116,12 @@ class Chunker(
 
                 // If target reached, flush
                 if (currentWords >= targetChunkWords) {
-                    flushCurrentChunk()
+                    flushCurrentChunk(carryOverlap = true)
                 }
             }
         }
 
-        flushCurrentChunk()
+        flushCurrentChunk(carryOverlap = false)
 
         // Fallback safety: if no chunks were formed for any reason, wrap full text
         if (chunks.isEmpty() && trimmed.isNotEmpty()) {
