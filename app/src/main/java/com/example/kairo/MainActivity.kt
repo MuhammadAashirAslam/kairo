@@ -124,6 +124,21 @@ fun KairoRootApp() {
         messages.addAll(active.messages)
     }
 
+    // Cancels any in-flight generation and finalizes the active placeholder, so a
+    // session switch / new chat / clear never leaves a stuck "generating" bubble
+    // or a coroutine writing into a replaced message list.
+    fun stopGeneration() {
+        generationJob?.cancel()
+        isGenerating = false
+        if (messages.isNotEmpty() && messages.last().isGenerating) {
+            messages[messages.lastIndex] = messages.last().copy(isGenerating = false)
+            app.conversationStore.updateLastAssistantMessage(
+                content = messages.last().content,
+                isGenerating = false
+            )
+        }
+    }
+
     LaunchedEffect(Unit) {
         refreshSessions()
     }
@@ -300,11 +315,13 @@ fun KairoRootApp() {
                 sessions = sessions,
                 activeSessionId = activeSessionId,
                 onSelectSession = { sid ->
+                    stopGeneration()
                     app.conversationStore.switchSession(sid)
                     refreshSessions()
                     scope.launch { drawerState.close() }
                 },
                 onNewChat = {
+                    stopGeneration()
                     app.conversationStore.createSession()
                     refreshSessions()
                     stagedImageUri = null
@@ -383,7 +400,15 @@ fun KairoRootApp() {
                                 )
                                 messages.add(assistantPlaceholder)
                                 app.conversationStore.addMessage(assistantPlaceholder)
-                                val assistantIndex = messages.lastIndex
+
+                                // Positional indices are unsafe here: switching, clearing, or
+                                // starting a new session mid-stream replaces the message list.
+                                // Look the bubble up by its stable id instead.
+                                val assistantMessageId = assistantPlaceholder.id
+                                fun updateStreamingMessage(transform: (ChatMessage) -> ChatMessage) {
+                                    val idx = messages.indexOfFirst { it.id == assistantMessageId }
+                                    if (idx >= 0) messages[idx] = transform(messages[idx])
+                                }
 
                                 isGenerating = true
 
@@ -394,7 +419,7 @@ fun KairoRootApp() {
                                         val modelInfo = RunAnywhere.models.get(modelId)
                                         if (modelInfo == null || modelInfo.local_path.isEmpty()) {
                                             val downloadingMsg = "Downloading model weights for $modelId... Check progress in Models Manager."
-                                            messages[assistantIndex] = messages[assistantIndex].copy(content = downloadingMsg)
+                                            updateStreamingMessage { it.copy(content = downloadingMsg) }
                                             app.conversationStore.updateLastAssistantMessage(content = downloadingMsg, isGenerating = true)
 
                                             RunAnywhere.models.download(modelId).collect { downloadEvent ->
@@ -403,11 +428,11 @@ fun KairoRootApp() {
                                                         val doneMb = downloadEvent.bytesDone / (1024 * 1024)
                                                         val totalMb = downloadEvent.bytesTotal / (1024 * 1024)
                                                         val pMsg = "Downloading model: $doneMb MB / $totalMb MB..."
-                                                        messages[assistantIndex] = messages[assistantIndex].copy(content = pMsg)
+                                                        updateStreamingMessage { it.copy(content = pMsg) }
                                                     }
                                                     is DownloadEvent.Completed -> {
                                                         val rMsg = "Model ready! Processing grounded query..."
-                                                        messages[assistantIndex] = messages[assistantIndex].copy(content = rMsg)
+                                                        updateStreamingMessage { it.copy(content = rMsg) }
                                                     }
                                                     is DownloadEvent.Failed -> {
                                                         throw downloadEvent.error
@@ -471,10 +496,12 @@ fun KairoRootApp() {
                                             when (event) {
                                                 is GenerationEvent.TextDelta -> {
                                                     generatedText += event.text
-                                                    messages[assistantIndex] = messages[assistantIndex].copy(
-                                                        content = generatedText,
-                                                        sources = sources
-                                                    )
+                                                    updateStreamingMessage {
+                                                        it.copy(
+                                                            content = generatedText,
+                                                            sources = sources
+                                                        )
+                                                    }
                                                     app.conversationStore.updateLastAssistantMessage(
                                                         content = generatedText,
                                                         isGenerating = true,
@@ -495,12 +522,14 @@ fun KairoRootApp() {
                                                     } else {
                                                         generatedText.ifBlank { "(No answer produced)" }
                                                     }
-                                                    messages[assistantIndex] = messages[assistantIndex].copy(
-                                                        content = finalText,
-                                                        sources = sources,
-                                                        metrics = metrics,
-                                                        isGenerating = false
-                                                    )
+                                                    updateStreamingMessage {
+                                                        it.copy(
+                                                            content = finalText,
+                                                            sources = sources,
+                                                            metrics = metrics,
+                                                            isGenerating = false
+                                                        )
+                                                    }
                                                     app.conversationStore.updateLastAssistantMessage(
                                                         content = finalText,
                                                         isGenerating = false,
@@ -516,10 +545,12 @@ fun KairoRootApp() {
                                                     } else {
                                                         "⚠️ *[Generation failed: $errorMsg]*"
                                                     }
-                                                    messages[assistantIndex] = messages[assistantIndex].copy(
-                                                        content = finalText,
-                                                        isGenerating = false
-                                                    )
+                                                    updateStreamingMessage {
+                                                        it.copy(
+                                                            content = finalText,
+                                                            isGenerating = false
+                                                        )
+                                                    }
                                                     app.conversationStore.updateLastAssistantMessage(
                                                         content = finalText,
                                                         isGenerating = false
@@ -532,10 +563,12 @@ fun KairoRootApp() {
                                         // User pressed Stop: keep whatever text streamed so far
                                         // instead of overwriting it with a bogus error message.
                                         val partial = generatedText.ifBlank { "(Generation stopped before any output)" }
-                                        messages[assistantIndex] = messages[assistantIndex].copy(
-                                            content = partial,
-                                            isGenerating = false
-                                        )
+                                        updateStreamingMessage {
+                                            it.copy(
+                                                content = partial,
+                                                isGenerating = false
+                                            )
+                                        }
                                         app.conversationStore.updateLastAssistantMessage(
                                             content = partial,
                                             isGenerating = false
@@ -543,10 +576,12 @@ fun KairoRootApp() {
                                         throw e
                                     } catch (e: Exception) {
                                         val errorMsg = "Inference error: ${e.localizedMessage ?: "Unknown error"}"
-                                        messages[assistantIndex] = messages[assistantIndex].copy(
-                                            content = errorMsg,
-                                            isGenerating = false
-                                        )
+                                        updateStreamingMessage {
+                                            it.copy(
+                                                content = errorMsg,
+                                                isGenerating = false
+                                            )
+                                        }
                                         app.conversationStore.updateLastAssistantMessage(
                                             content = errorMsg,
                                             isGenerating = false
@@ -557,20 +592,13 @@ fun KairoRootApp() {
                                 }
                             },
                             onStopGeneration = {
-                                generationJob?.cancel()
-                                isGenerating = false
-                                if (messages.isNotEmpty() && messages.last().isGenerating) {
-                                    messages[messages.lastIndex] = messages.last().copy(isGenerating = false)
-                                    app.conversationStore.updateLastAssistantMessage(
-                                        content = messages.last().content,
-                                        isGenerating = false
-                                    )
-                                }
+                                stopGeneration()
                             },
                             onOpenDrawer = {
                                 scope.launch { drawerState.open() }
                             },
                             onNewChat = {
+                                stopGeneration()
                                 app.conversationStore.createSession()
                                 refreshSessions()
                                 stagedImageUri = null
@@ -597,6 +625,7 @@ fun KairoRootApp() {
                                 Toast.makeText(context, "Active model set to: $mid", Toast.LENGTH_SHORT).show()
                             },
                             onClearChat = {
+                                stopGeneration()
                                 messages.clear()
                                 app.conversationStore.clearCurrentSession()
                             }
@@ -620,6 +649,7 @@ fun KairoRootApp() {
                                 chunkCount = 0
                             },
                             onChatCleared = {
+                                stopGeneration()
                                 messages.clear()
                                 app.conversationStore.clearCurrentSession()
                             }
