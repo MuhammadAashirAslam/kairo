@@ -412,6 +412,10 @@ fun KairoRootApp() {
 
                                 isGenerating = true
 
+                                // Declared outside the coroutine's try block so the
+                                // cancellation handler can flush the partial response.
+                                var generatedText = ""
+
                                 generationJob = scope.launch {
                                     try {
                                         // 1. Check if model is downloaded
@@ -480,7 +484,6 @@ fun KairoRootApp() {
                                         )
 
                                         // 4. Stream LLM Generation
-                                        var generatedText = ""
                                         val maxTokens = if (modelId == KairoApp.MODEL_QWEN_CODER_1_5B) {
                                             app.preferences.maxOutputTokens.coerceAtLeast(1024)
                                         } else {
