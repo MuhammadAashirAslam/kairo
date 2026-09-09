@@ -5,6 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.Executors
 
 enum class MessageRole {
     USER,
@@ -56,6 +57,13 @@ class ConversationStore(private val context: Context? = null) {
 
     private val storageFile: File? by lazy {
         context?.let { File(it.filesDir, "chat_sessions.json") }
+    }
+
+    // Single-threaded writer keeps disk writes ordered while keeping file IO
+    // off the caller (usually the main thread). Callers mutate under the class
+    // lock, so the serialized snapshot is always consistent.
+    private val diskWriter = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "kairo-chat-store").apply { isDaemon = true }
     }
 
     init {
@@ -203,58 +211,71 @@ class ConversationStore(private val context: Context? = null) {
     @Synchronized
     fun saveToDisk() {
         val file = storageFile ?: return
-        try {
-            val rootArray = JSONArray()
-            sessions.forEach { s ->
-                val sObj = JSONObject()
-                sObj.put("id", s.id)
-                sObj.put("title", s.title)
-                sObj.put("createdAt", s.createdAt)
-                sObj.put("updatedAt", s.updatedAt)
-                sObj.put("isPinned", s.isPinned)
-                sObj.put("attachedDocName", s.attachedDocName ?: JSONObject.NULL)
-
-                val mArray = JSONArray()
-                s.messages.forEach { m ->
-                    val mObj = JSONObject()
-                    mObj.put("id", m.id)
-                    mObj.put("role", m.role.name)
-                    mObj.put("content", m.content)
-                    mObj.put("timestamp", m.timestamp)
-                    mObj.put("imageUri", m.imageUri ?: JSONObject.NULL)
-
-                    if (m.metrics != null) {
-                        val metObj = JSONObject()
-                        metObj.put("tokensPerSecond", m.metrics.tokensPerSecond.toDouble())
-                        metObj.put("inputTokens", m.metrics.inputTokens)
-                        metObj.put("outputTokens", m.metrics.outputTokens)
-                        metObj.put("durationMs", m.metrics.durationMs)
-                        mObj.put("metrics", metObj)
-                    }
-
-                    if (m.sources.isNotEmpty()) {
-                        val srcArray = JSONArray()
-                        m.sources.forEach { src ->
-                            val srcObj = JSONObject()
-                            srcObj.put("chunkIndex", src.chunkIndex)
-                            srcObj.put("text", src.text)
-                            srcObj.put("score", src.score.toDouble())
-                            srcObj.put("docName", src.docName)
-                            srcObj.put("breadcrumb", src.breadcrumb)
-                            srcObj.put("matchType", src.matchType)
-                            srcArray.put(srcObj)
-                        }
-                        mObj.put("sources", srcArray)
-                    }
-                    mArray.put(mObj)
-                }
-                sObj.put("messages", mArray)
-                rootArray.put(sObj)
-            }
-            file.writeText(rootArray.toString())
+        val payload = try {
+            serializeSessions()
         } catch (e: Exception) {
             e.printStackTrace()
+            return
         }
+        diskWriter.execute {
+            try {
+                file.writeText(payload)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    /** Must be called under the class monitor (all callers are @Synchronized). */
+    private fun serializeSessions(): String {
+        val rootArray = JSONArray()
+        sessions.forEach { s ->
+            val sObj = JSONObject()
+            sObj.put("id", s.id)
+            sObj.put("title", s.title)
+            sObj.put("createdAt", s.createdAt)
+            sObj.put("updatedAt", s.updatedAt)
+            sObj.put("isPinned", s.isPinned)
+            sObj.put("attachedDocName", s.attachedDocName ?: JSONObject.NULL)
+
+            val mArray = JSONArray()
+            s.messages.forEach { m ->
+                val mObj = JSONObject()
+                mObj.put("id", m.id)
+                mObj.put("role", m.role.name)
+                mObj.put("content", m.content)
+                mObj.put("timestamp", m.timestamp)
+                mObj.put("imageUri", m.imageUri ?: JSONObject.NULL)
+
+                if (m.metrics != null) {
+                    val metObj = JSONObject()
+                    metObj.put("tokensPerSecond", m.metrics.tokensPerSecond.toDouble())
+                    metObj.put("inputTokens", m.metrics.inputTokens)
+                    metObj.put("outputTokens", m.metrics.outputTokens)
+                    metObj.put("durationMs", m.metrics.durationMs)
+                    mObj.put("metrics", metObj)
+                }
+
+                if (m.sources.isNotEmpty()) {
+                    val srcArray = JSONArray()
+                    m.sources.forEach { src ->
+                        val srcObj = JSONObject()
+                        srcObj.put("chunkIndex", src.chunkIndex)
+                        srcObj.put("text", src.text)
+                        srcObj.put("score", src.score.toDouble())
+                        srcObj.put("docName", src.docName)
+                        srcObj.put("breadcrumb", src.breadcrumb)
+                        srcObj.put("matchType", src.matchType)
+                        srcArray.put(srcObj)
+                    }
+                    mObj.put("sources", srcArray)
+                }
+                mArray.put(mObj)
+            }
+            sObj.put("messages", mArray)
+            rootArray.put(sObj)
+        }
+        return rootArray.toString()
     }
 
     @Synchronized
