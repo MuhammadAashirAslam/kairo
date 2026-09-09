@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/kairo_bg_removed.png" alt="Kairo Logo" width="120" />
+  <img src="https://raw.githubusercontent.com/MuhammadAashirAslam/kairo/main/assets/kairo_bg_removed.png" alt="Kairo Logo" width="120" />
 </p>
 
 <h1 align="center">Kairo</h1>
@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://android.com"><img src="https://img.shields.io/badge/Platform-Android%2010%2B%20(API%2029%2B)-green.svg" alt="Platform" /></a>
-  <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.0.21-blue.svg" alt="Kotlin" /></a>
+  <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.4.0-blue.svg" alt="Kotlin" /></a>
   <a href="https://developer.android.com/jetpack/compose"><img src="https://img.shields.io/badge/Jetpack-Compose%20M3-purple.svg" alt="Compose" /></a>
   <a href="https://github.com/ggerganov/llama.cpp"><img src="https://img.shields.io/badge/Inference-llama.cpp%20(RunAnywhere)-orange.svg" alt="Inference" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
@@ -25,7 +25,7 @@ Running 100% on-device with zero telemetry and zero cloud API keys, Kairo execut
 
 ## ✨ Features & Capabilities
 
-- **🔒 100% Offline & Private**: Zero data leaves your device. Model weights, vector stores, inverted indexes, chat history, and document extractions remain sandboxed in internal storage.
+- **🔒 100% Offline & Private**: Zero data leaves your device. Model weights, chat history, and document extractions remain sandboxed in internal storage; retrieval indexes are rebuilt in-memory per session and never leave the device.
 - **🩺 Multi-Persona Reasoning & Consultation Harness**:
   - **Clinical / Doctor Consultation**: Tailored for healthcare providers to summarize clinical notes, review symptom timelines, and cross-examine patient records with structured grounding.
   - **Code & Engineering**: Optimized for software developers with complete code generation, syntax highlighting, and architectural reasoning.
