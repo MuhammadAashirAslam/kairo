@@ -267,8 +267,13 @@ fun KairoRootApp() {
                 ocrResult.onSuccess { extracted ->
                     stagedImageText = extracted.fullText
                     Toast.makeText(context, "OCR Scanned: ${extracted.lineCount} lines detected", Toast.LENGTH_SHORT).show()
-                    // Automatically index the image document
-                    ingestDocumentText(extracted.imageName, extracted.fullText)
+                    // Only index the image as a standalone document when nothing else
+                    // is loaded; otherwise it would silently replace the user's active
+                    // document. With a document present, the OCR text still grounds the
+                    // answer directly via the prompt's additionalContext.
+                    if (!app.chunkStore.isDocumentLoaded()) {
+                        ingestDocumentText(extracted.imageName, extracted.fullText)
+                    }
                 }.onFailure { err ->
                     Toast.makeText(context, "OCR Error: ${err.message}", Toast.LENGTH_LONG).show()
                 }
@@ -300,7 +305,9 @@ fun KairoRootApp() {
                 ocrResult.onSuccess { extracted ->
                     stagedImageText = extracted.fullText
                     Toast.makeText(context, "Photo Scanned: ${extracted.lineCount} lines detected", Toast.LENGTH_SHORT).show()
-                    ingestDocumentText(extracted.imageName, extracted.fullText)
+                    if (!app.chunkStore.isDocumentLoaded()) {
+                        ingestDocumentText(extracted.imageName, extracted.fullText)
+                    }
                 }.onFailure { err ->
                     Toast.makeText(context, "OCR Error: ${err.message}", Toast.LENGTH_LONG).show()
                 }
@@ -480,7 +487,8 @@ fun KairoRootApp() {
                                             retrievedChunks = scoredChunks,
                                             hasLoadedDocument = isDocLoaded,
                                             persona = app.preferences.systemPersona,
-                                            customPrompt = app.preferences.customSystemPrompt
+                                            customPrompt = app.preferences.customSystemPrompt,
+                                            additionalContext = currentImageText
                                         )
 
                                         // 4. Stream LLM Generation

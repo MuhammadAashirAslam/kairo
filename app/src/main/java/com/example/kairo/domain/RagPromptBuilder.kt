@@ -29,15 +29,22 @@ class RagPromptBuilder {
         retrievedChunks: List<ScoredChunk>,
         hasLoadedDocument: Boolean = true,
         persona: SystemPersona = SystemPersona.GENERAL,
-        customPrompt: String = ""
+        customPrompt: String = "",
+        additionalContext: String? = null
     ): String {
         val personaInstructions = getPersonaInstructions(persona, customPrompt)
+
+        // Optional image/OCR context attached directly to the prompt. This is
+        // independent of the document index, so image text grounds the answer
+        // even while background ingestion is still running.
+        val ocrSection = additionalContext?.trim().takeUnless { it.isNullOrEmpty() }
+            ?.let { "Attached image text (on-device OCR):\n$it\n\n" } ?: ""
 
         if (!hasLoadedDocument) {
             return """
 $personaInstructions
 
-Question: ${userQuestion.trim()}
+${ocrSection}Question: ${userQuestion.trim()}
 
 Answer:
 """.trimIndent()
@@ -68,7 +75,7 @@ Grounding Rules:
 Context:
 $contextSection
 
-Question: ${userQuestion.trim()}
+${ocrSection}Question: ${userQuestion.trim()}
 
 Answer:
 """.trimIndent()
