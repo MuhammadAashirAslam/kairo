@@ -413,6 +413,11 @@ fun KairoRootApp() {
 
                                 generationJob = scope.launch {
                                     try {
+                                        // Wait for background model registration in
+                                        // KairoApp.onCreate; otherwise a fast first message
+                                        // sees an empty registry and the lookup below fails.
+                                        KairoApp.modelsRegistered.await()
+
                                         // 1. Check if model is downloaded
                                         val modelId = KairoApp.selectedModelId
                                         val modelInfo = RunAnywhere.models.get(modelId)

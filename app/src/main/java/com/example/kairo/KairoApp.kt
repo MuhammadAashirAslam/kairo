@@ -15,6 +15,7 @@ import com.runanywhere.sdk.public.api.InferenceFramework
 import com.runanywhere.sdk.public.api.ModelRegistration
 import com.runanywhere.sdk.public.api.models
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import com.example.kairo.data.KairoPreferences
@@ -49,6 +50,9 @@ class KairoApp : Application() {
         var maxOutputTokens: Int
             get() = if (::instance.isInitialized) instance.preferences.maxOutputTokens else 1024
             set(value) { if (::instance.isInitialized) instance.preferences.maxOutputTokens = value }
+
+        /** Completes once background model registration in onCreate has finished. */
+        val modelsRegistered = CompletableDeferred<Unit>()
     }
 
     lateinit var preferences: KairoPreferences
@@ -148,6 +152,10 @@ class KairoApp : Application() {
                 )
             } catch (e: Exception) {
                 e.printStackTrace()
+            } finally {
+                // Unblock generation even on partial registration failure; the
+                // model lookup downstream surfaces any missing model as an error.
+                modelsRegistered.complete(Unit)
             }
         }
     }
