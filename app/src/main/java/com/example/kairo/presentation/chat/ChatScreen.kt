@@ -141,25 +141,24 @@ fun ChatScreen(
     // State to track if the user has actively scrolled away from the bottom
     var userScrolledUp by remember { mutableStateOf(false) }
 
-    // Check whether the last item is currently visible in the viewport
+    // Check whether the trailing edge of the last message is actually visible.
+    // A streaming bubble can be taller than the screen, so checking only the last
+    // item's index wrongly reports "at bottom" while new tokens render off-screen.
     val isAtBottom by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
             if (totalItems == 0) return@derivedStateOf true
             val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
-            lastVisible.index >= totalItems - 1
+            lastVisible.index >= totalItems - 1 &&
+                lastVisible.offset + lastVisible.size <= layoutInfo.viewportEndOffset + 48
         }
     }
 
-    // Detect user manual scroll interaction - pause sticky auto-scroll if scrolling up
+    // Detect user manual scroll interaction - pause sticky auto-scroll when leaving the bottom
     LaunchedEffect(listState.isScrollInProgress) {
-        if (listState.isScrollInProgress) {
-            val totalItems = listState.layoutInfo.totalItemsCount
-            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            if (lastVisible < totalItems - 1) {
-                userScrolledUp = true
-            }
+        if (listState.isScrollInProgress && !isAtBottom) {
+            userScrolledUp = true
         }
     }
 
@@ -170,11 +169,13 @@ fun ChatScreen(
         }
     }
 
-    // Auto-scroll to bottom on new message or streaming delta, ONLY if user hasn't scrolled up
+    // Auto-scroll on new message or streaming delta, ONLY if user hasn't scrolled up.
+    // Int.MAX_VALUE offset clamps to the max scroll position, pinning the view to the
+    // true end of the stream instead of the top of a screen-tall bubble.
     LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
         if (messages.isNotEmpty() && !userScrolledUp) {
             // Instant scroll keeps up with token streaming without sluggish animations or locking gestures
-            listState.scrollToItem(messages.size - 1)
+            listState.scrollToItem(messages.size - 1, scrollOffset = Int.MAX_VALUE)
         }
     }
 
@@ -456,7 +457,7 @@ fun ChatScreen(
                             onClick = {
                                 userScrolledUp = false
                                 scope.launch {
-                                    listState.animateScrollToItem(messages.size - 1)
+                                    listState.animateScrollToItem(messages.size - 1, scrollOffset = Int.MAX_VALUE)
                                 }
                             },
                             modifier = Modifier.size(36.dp),
