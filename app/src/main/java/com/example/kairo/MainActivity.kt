@@ -409,6 +409,7 @@ fun KairoRootApp() {
                                 // Declared outside the coroutine's try block so the
                                 // cancellation handler can flush the partial response.
                                 var generatedText = ""
+                                var lastDeltaFlushMs = 0L
 
                                 generationJob = scope.launch {
                                     try {
@@ -495,17 +496,24 @@ fun KairoRootApp() {
                                             when (event) {
                                                 is GenerationEvent.TextDelta -> {
                                                     generatedText += event.text
-                                                    updateStreamingMessage {
-                                                        it.copy(
+                                                    // Throttle state flushes: recomposing + re-parsing the
+                                                    // whole markdown tree per token is O(n^2) and starves
+                                                    // the UI thread during streaming.
+                                                    val now = System.currentTimeMillis()
+                                                    if (now - lastDeltaFlushMs >= 80L) {
+                                                        lastDeltaFlushMs = now
+                                                        updateStreamingMessage {
+                                                            it.copy(
+                                                                content = generatedText,
+                                                                sources = sources
+                                                            )
+                                                        }
+                                                        app.conversationStore.updateLastAssistantMessage(
                                                             content = generatedText,
+                                                            isGenerating = true,
                                                             sources = sources
                                                         )
                                                     }
-                                                    app.conversationStore.updateLastAssistantMessage(
-                                                        content = generatedText,
-                                                        isGenerating = true,
-                                                        sources = sources
-                                                    )
                                                 }
                                                 is GenerationEvent.Completed -> {
                                                     val res = event.result
