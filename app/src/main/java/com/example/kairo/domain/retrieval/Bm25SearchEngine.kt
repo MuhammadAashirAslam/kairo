@@ -159,7 +159,8 @@ class Bm25SearchEngine(
             } else if (sb.isNotEmpty()) {
                 val token = sb.toString()
                 sb.setLength(0)
-                if (token.length > 1 && !stopWords.contains(token)) {
+                // Keep single-character tokens (units, error codes, grades like "5" or "C")
+                if (token.isNotEmpty() && !stopWords.contains(token)) {
                     tokens.add(token)
                 }
             }
@@ -167,7 +168,7 @@ class Bm25SearchEngine(
 
         if (sb.isNotEmpty()) {
             val token = sb.toString()
-            if (token.length > 1 && !stopWords.contains(token)) {
+            if (token.isNotEmpty() && !stopWords.contains(token)) {
                 tokens.add(token)
             }
         }
