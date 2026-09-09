@@ -1,6 +1,5 @@
 package com.example.kairo.presentation.chat
 
-import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -99,6 +98,7 @@ import com.example.kairo.data.ChatMessage
 import com.example.kairo.presentation.components.AttachmentBottomSheet
 import com.example.kairo.presentation.components.ChatBubble
 import com.example.kairo.presentation.components.DocumentStatusChip
+import com.example.kairo.presentation.components.rememberDownsampledBitmap
 import com.example.kairo.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -197,18 +197,8 @@ fun ChatScreen(
         )
     }
 
-    // Staged image thumbnail bitmap
-    val stagedBitmap = remember(stagedImageUri) {
-        stagedImageUri?.let { uri ->
-            try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    BitmapFactory.decodeStream(stream)
-                }
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
+    // Staged image thumbnail bitmap (decoded off the main thread, downsampled)
+    val stagedBitmap = rememberDownsampledBitmap(context, stagedImageUri?.toString())
 
     val modelDisplayName = when (activeModelId) {
         KairoApp.MODEL_QWEN_CODER_1_5B -> "Qwen 2.5 Coder 1.5B"

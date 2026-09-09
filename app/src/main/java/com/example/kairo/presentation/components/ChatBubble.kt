@@ -1,8 +1,6 @@
 package com.example.kairo.presentation.components
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.net.Uri
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -75,18 +73,8 @@ fun ChatBubble(
 ) {
     val isUser = message.role == MessageRole.USER
     val context = LocalContext.current
-    val bitmap: Bitmap? = remember(message.imageUri) {
-        message.imageUri?.let { uriStr ->
-            try {
-                val uri = Uri.parse(uriStr)
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    BitmapFactory.decodeStream(stream)
-                }
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
+    // Decoded off the main thread and downsampled for thumbnail display
+    val bitmap: Bitmap? = rememberDownsampledBitmap(context, message.imageUri, maxDimensionPx = 1024)
 
     Row(
         modifier = modifier
