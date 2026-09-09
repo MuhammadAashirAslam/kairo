@@ -20,7 +20,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.kairo"
-        minSdk = 24
+        minSdk = 29
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
@@ -30,8 +30,9 @@ android {
 
     buildTypes {
         release {
+            // R8 shrinking/obfuscation; JNI surfaces are protected via src/main/keepRules
             optimization {
-                enable = false
+                enable = true
             }
         }
     }

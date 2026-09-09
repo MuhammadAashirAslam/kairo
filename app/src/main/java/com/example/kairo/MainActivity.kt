@@ -327,7 +327,7 @@ fun KairoRootApp() {
                     scope.launch { drawerState.close() }
                 },
                 onOpenKnowledgeBase = {
-                    filePickerLauncher.launch(arrayOf("text/*", "text/plain", "application/pdf", "*/*"))
+                    filePickerLauncher.launch(arrayOf("application/pdf", "text/*"))
                     scope.launch { drawerState.close() }
                 },
                 onOpenSettings = {
@@ -617,7 +617,7 @@ fun KairoRootApp() {
                                 stagedImageText = null
                             },
                             onPickDocumentClick = {
-                                filePickerLauncher.launch(arrayOf("text/*", "text/plain", "application/pdf", "*/*"))
+                                filePickerLauncher.launch(arrayOf("application/pdf", "text/*"))
                             },
                             onPickImageClick = {
                                 pickVisualMediaLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
