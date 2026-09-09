@@ -448,7 +448,8 @@ fun KairoRootApp() {
                                         val scoredChunks = if (isDocLoaded) {
                                             app.retrievalService.retrieveTopK(
                                                 query = query,
-                                                k = KairoApp.topKRetrieval
+                                                k = KairoApp.topKRetrieval,
+                                                minScoreThreshold = KairoApp.similarityThreshold
                                             )
                                         } else {
                                             emptyList()

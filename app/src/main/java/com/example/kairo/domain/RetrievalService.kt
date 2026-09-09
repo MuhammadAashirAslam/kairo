@@ -151,18 +151,25 @@ class RetrievalService(
         }
 
         // Map selected indices to ScoredChunk objects with normalized scores
-        selectedIndices.map { idx ->
-            // Normalize score to intuitive 0.0 - 1.0 confidence range
-            val normalizedConfidence = ((rrfScores[idx] / maxRrf) * 0.5f + denseScores[idx].coerceIn(0f, 1f) * 0.5f)
-                .coerceIn(0.1f, 0.99f)
+        val scored = selectedIndices.map { idx ->
+            // Raw relevance in 0..1, computed before display coercion; the
+            // user-configured similarity threshold must apply to this value.
+            val relevance = (rrfScores[idx] / maxRrf) * 0.5f + denseScores[idx].coerceIn(0f, 1f) * 0.5f
 
             ScoredChunk(
                 chunk = chunks[idx],
-                score = normalizedConfidence,
+                // Normalize score to intuitive 0.0 - 1.0 confidence range
+                score = relevance.coerceIn(0.1f, 0.99f),
                 matchType = matchTypes[idx],
                 bm25Score = bm25ScoreMap[idx] ?: 0f,
                 denseScore = denseScores[idx]
-            )
-        }.filter { it.score >= minScoreThreshold }
+            ) to relevance
+        }
+
+        val filtered = scored.filter { it.second >= minScoreThreshold }.map { it.first }
+
+        // Never return empty-handed when an index exists: keep the single best
+        // chunk as grounding fallback even if nothing clears the threshold.
+        if (filtered.isEmpty() && scored.isNotEmpty()) listOf(scored.first().first) else filtered
     }
 }
